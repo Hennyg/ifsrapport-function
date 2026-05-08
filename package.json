@@ -1,13 +1,15 @@
 {
-  "name": "ifsrapport",
-  "version": "1.0.0",
-  "description": "IFS rapport collector",
-  "main": "src/functions/*.js",
-  "scripts": {
-    "start": "func start"
+  "version": "2.0",
+  "logging": {
+    "applicationInsights": {
+      "samplingSettings": {
+        "isEnabled": true,
+        "excludedTypes": "Request"
+      }
+    }
   },
-  "dependencies": {
-    "@azure/functions": "^4.5.0",
-    "pdf-parse": "^1.1.1"
+  "extensionBundle": {
+    "id": "Microsoft.Azure.Functions.ExtensionBundle",
+    "version": "[4.*, 5.0.0)"
   }
 }
