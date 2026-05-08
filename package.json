@@ -1,0 +1,13 @@
+{
+  "name": "ifsrapport",
+  "version": "1.0.0",
+  "description": "IFS rapport collector",
+  "main": "src/functions/*.js",
+  "scripts": {
+    "start": "func start"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.5.0",
+    "pdf-parse": "^1.1.1"
+  }
+}
