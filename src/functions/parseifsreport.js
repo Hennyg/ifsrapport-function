@@ -70,23 +70,23 @@ function uniquePush(arr, item, keyBuilder) {
 }
 
 // --------------------------------------------------
-// Labels
+// Labels  (dansk + engelsk)
 // --------------------------------------------------
 const LABELS = {
     interventionDate: ['Intervention Date', 'Besøgs dato', 'Besøgsdato'],
-    serviceType: ['Service Type', 'Servicetype'],
-    technicianName: ['Technician Name', 'Teknikerens navn', 'Tekniker'],
-    reference: ['Reference'],
-    task: ['Task', 'Opgave'],
-    customer: ['Customer', 'Kunde'],
-    customerName: ['Customer Name', 'Kundenavn'],
-    customerContact: ['Customer Contact', 'Kundekontakt'],
-    description: ['Description', 'Beskrivelse'],
-    product: ['Product', 'Produkt'],
-    partsUsed: ['Parts Used', 'Brugte dele'],
-    partsReturned: ['Parts Returned', 'Dele returneres'],
+    serviceType:      ['Service Type', 'Servicetype'],
+    technicianName:   ['Technician Name', 'Teknikerens navn', 'Tekniker'],
+    reference:        ['Reference'],
+    task:             ['Task', 'Opgave'],
+    customer:         ['Customer', 'Kunde'],
+    customerName:     ['Customer Name', 'Kundenavn'],
+    customerContact:  ['Customer Contact', 'Kundekontakt'],
+    description:      ['Description', 'Beskrivelse'],
+    product:          ['Product', 'Produkt'],
+    partsUsed:        ['Parts Used', 'Brugte dele'],
+    partsReturned:    ['Parts Returned', 'Dele returneres'],
     labourAndExpense: ['Labour and Expenses', 'Labour and Expense', 'Arbejdskraft og Udgifter'],
-    notes: ['Notes', 'Noter']
+    notes:            ['Notes', 'Noter']
 };
 
 const ALL_SECTION_HEADINGS = [
@@ -200,16 +200,16 @@ function parseKunde(lines, fileName, serviceOrder) {
     const kundeBlock = getSectionLines(lines, LABELS.customer);
 
     return {
-        kunde: kundeBlock[0] || null,
+        kunde:        kundeBlock[0] || null,
         kundeadresse: kundeBlock.length > 1 ? kundeBlock.slice(1).join(', ') : null,
-        kundenummer: getValueAfterAnyLabel(lines, LABELS.customerName),
+        kundenummer:  getValueAfterAnyLabel(lines, LABELS.customerName),
         kundekontakt: getValueAfterAnyLabel(lines, LABELS.customerContact),
-        besogsdato: normalizeDate(getValueAfterAnyLabel(lines, LABELS.interventionDate)),
-        servicetype: getValueAfterAnyLabel(lines, LABELS.serviceType),
+        besogsdato:   normalizeDate(getValueAfterAnyLabel(lines, LABELS.interventionDate)),
+        servicetype:  getValueAfterAnyLabel(lines, LABELS.serviceType),
         servicenummer: serviceOrder || extractServiceNumberFromFileName(fileName),
-        tekniker: getValueAfterAnyLabel(lines, LABELS.technicianName),
-        reference: getValueAfterAnyLabel(lines, LABELS.reference),
-        task: getValueAfterAnyLabel(lines, LABELS.task)
+        tekniker:     getValueAfterAnyLabel(lines, LABELS.technicianName),
+        reference:    getValueAfterAnyLabel(lines, LABELS.reference),
+        task:         getValueAfterAnyLabel(lines, LABELS.task)
     };
 }
 
@@ -242,28 +242,20 @@ function parseProdukt(lines) {
         .filter(Boolean);
 
     if (!productLines.length) {
-        return {
-            serienummer: null,
-            beskrivelse: null,
-            model: null
-        };
+        return { serienummer: null, beskrivelse: null, model: null };
     }
 
     const line = productLines[0];
 
     const m = line.match(/^([A-Z0-9-]+)\s+(.+?)\s+([A-Z0-9_]+)$/i);
     if (!m) {
-        return {
-            serienummer: null,
-            beskrivelse: cleanValue(line),
-            model: null
-        };
+        return { serienummer: null, beskrivelse: cleanValue(line), model: null };
     }
 
     return {
         serienummer: cleanValue(m[1]),
         beskrivelse: cleanValue(m[2]),
-        model: cleanValue(m[3])
+        model:       cleanValue(m[3])
     };
 }
 
@@ -273,34 +265,31 @@ function parseProdukt(lines) {
 function parseItemLine(rawLine) {
     const line = normalizeCompactedLine(rawLine);
 
-    const match = line.match(/^((?:15[A-Z]{3}\d{3})|(?:\d+(?:\.\d+)+))(.*)$/i);
+    // Matcher varenummer-formater:
+    //   15EXP101, 15EXP201  (arbejdstid/kørsel)
+    //   5.1005.3576.0       (reservedel med punktum-separerede tal)
+    const match = line.match(/^((?:15[A-Z]{3}\d{3})|(?:\d+(?:\.\d+)+))\s*(.*)$/i);
     if (!match) return null;
 
-    const varenummer = match[1];
-    const rest = cleanValue(match[2]);
-    if (!rest) return null;
+    const varenummer = match[1].trim();
+    let rest = cleanValue(match[2]);
+    if (!rest) return { varenummer, beskrivelse: null, antal: null, rawLine };
 
+    // Fjern serie-felt "X" eller enkelt bogstav midt i linjen før antal
+    rest = rest.replace(/\bX\b\s*/i, '').trim();
+
+    // Antal sidst på linjen
     const qtyMatch = rest.match(/(\d+(?:[.,]\d+)?)\s*$/);
     if (!qtyMatch) {
-        return {
-            varenummer,
-            beskrivelse: rest,
-            antal: null,
-            rawLine
-        };
+        return { varenummer, beskrivelse: cleanValue(rest) || null, antal: null, rawLine };
     }
 
     const antal = toNumber(qtyMatch[1]);
     const beskrivelse = cleanValue(
         rest.substring(0, rest.length - qtyMatch[1].length).trim()
-    );
+    ) || null;
 
-    return {
-        varenummer,
-        beskrivelse,
-        antal,
-        rawLine
-    };
+    return { varenummer, beskrivelse, antal, rawLine };
 }
 
 // --------------------------------------------------
@@ -312,31 +301,72 @@ function parseBrugteDele(lines, pageNumber) {
     const arbejdstid = [];
     const reservedele = [];
 
-    for (const rawLine of sectionLines) {
-        if (isHeaderLine(rawLine) || isNoiseLine(rawLine)) continue;
+    let i = 0;
+    while (i < sectionLines.length) {
+        const rawLine = sectionLines[i];
 
-        const item = parseItemLine(rawLine);
+        if (isHeaderLine(rawLine) || isNoiseLine(rawLine)) { i++; continue; }
+
+        // Forsøg 1: varenummer + beskrivelse + [serial] + antal på én linje
+        let item = parseItemLine(rawLine);
+
+        // Forsøg 2: PDF har splittet linjen over flere linjer
+        // f.eks.  "15EXP101\nTimer hverdag 07-16\n0.25"
+        if (item && item.beskrivelse === null && item.antal === null) {
+            const nextLine  = sectionLines[i + 1] || '';
+            const afterLine = sectionLines[i + 2] || '';
+
+            const nextIsDesc   = nextLine  && !isHeaderLine(nextLine)  && !/^\d+(?:[.,]\d+)?$/.test(nextLine.trim());
+            const afterIsAntal = afterLine && /^\d+(?:[.,]\d+)?$/.test(afterLine.trim());
+
+            if (nextIsDesc && afterIsAntal) {
+                // beskrivelse og antal på separate linjer
+                item = {
+                    varenummer:  item.varenummer,
+                    beskrivelse: cleanValue(nextLine) || null,
+                    antal:       toNumber(afterLine.trim()),
+                    rawLine:     `${rawLine} ${nextLine} ${afterLine}`
+                };
+                i += 3;
+            } else if (nextIsDesc) {
+                // beskrivelse på næste linje, antal evt. embedded
+                const embedded = parseItemLine(`${item.varenummer} ${nextLine}`);
+                if (embedded) {
+                    item = { ...embedded, rawLine: `${rawLine} ${nextLine}` };
+                } else {
+                    item = { varenummer: item.varenummer, beskrivelse: cleanValue(nextLine), antal: null, rawLine: `${rawLine} ${nextLine}` };
+                }
+                i += 2;
+            } else {
+                i++;
+            }
+        } else if (item) {
+            i++;
+        } else {
+            i++;
+            continue;
+        }
+
         if (!item) continue;
 
         const obj = {
             pageNumber,
-            varenummer: item.varenummer,
+            varenummer:  item.varenummer,
             beskrivelse: item.beskrivelse,
-            antal: item.antal,
-            rawLine: item.rawLine
+            antal:       item.antal,
+            rawLine:     item.rawLine
         };
 
+        const key = x => `${x.pageNumber}|${x.varenummer}|${x.beskrivelse}|${x.antal}`;
+
         if (isArbejdstidVarenummer(item.varenummer)) {
-            uniquePush(arbejdstid, obj, x => `${x.pageNumber}|${x.varenummer}|${x.beskrivelse}|${x.antal}`);
+            uniquePush(arbejdstid, obj, key);
         } else {
-            uniquePush(reservedele, obj, x => `${x.pageNumber}|${x.varenummer}|${x.beskrivelse}|${x.antal}`);
+            uniquePush(reservedele, obj, key);
         }
     }
 
-    return {
-        arbejdstid,
-        reservedele
-    };
+    return { arbejdstid, reservedele };
 }
 
 // --------------------------------------------------
@@ -359,32 +389,29 @@ function parseDeleReturneret(lines, pageNumber) {
             results,
             {
                 pageNumber,
-                varenummer: item.varenummer,
+                varenummer:  item.varenummer,
                 beskrivelse: item.beskrivelse,
-                antal: item.antal,
-                rawLine: item.rawLine
+                antal:       item.antal,
+                rawLine:     item.rawLine
             },
             x => `${x.pageNumber}|${x.varenummer}|${x.beskrivelse}|${x.antal}`
         );
     }
 
-    return {
-        linjer: results
-    };
+    return { linjer: results };
 }
 
 // --------------------------------------------------
 // Arbejdskraft og udgifter
+// (bruges ikke til arbejdstid/kørsel længere – det læses fra Parts Used)
+// Beholdes til evt. udgiftslinjer uden varenummer
 // --------------------------------------------------
 function parseArbejdskraftOgUdgifter(pageText, pageNumber) {
     const text = String(pageText || '');
 
     const startMatch = text.match(/(?:Labour and Expenses|Labour and Expense|Arbejdskraft og Udgifter)\s*/i);
     if (!startMatch) {
-        return {
-            linjer: [],
-            raw: null
-        };
+        return { linjer: [], raw: null };
     }
 
     const startIndex = startMatch.index + startMatch[0].length;
@@ -396,52 +423,83 @@ function parseArbejdskraftOgUdgifter(pageText, pageNumber) {
     }
 
     sectionText = cleanValue(sectionText);
-
     if (!sectionText) {
-        return {
-            linjer: [],
-            raw: null
-        };
+        return { linjer: [], raw: null };
     }
 
     const rawLines = sectionText
         .split('\n')
         .map(x => x.trim())
-        .filter(Boolean);
+        .filter(Boolean)
+        .filter(x => !isHeaderLine(x))
+        .filter(x => !isNoiseLine(x));
 
     const results = [];
 
-    for (let rawLine of rawLines) {
-        if (isHeaderLine(rawLine) || isNoiseLine(rawLine)) continue;
+    let i = 0;
+    while (i < rawLines.length) {
+        const rawLine = rawLines[i];
+        const line = normalizeCompactedLine(rawLine);
 
-        let line = normalizeCompactedLine(rawLine);
+        // Forsøg 1: beskrivelse + dato + beløb på én linje
+        const oneLiner = line.match(/^(.*?)(\d{2}[-/]\d{2}[-/]\d{4})\s*(\d+(?:[.,]\d+)?)$/);
+        if (oneLiner) {
+            const beskrivelse = cleanValue(oneLiner[1]);
+            const dato        = normalizeDate(oneLiner[2]);
+            const beloeb      = toNumber(oneLiner[3]);
 
-        const match = line.match(/^(.*?)(\d{2}[-/]\d{2}[-/]\d{4})\s*(\d+(?:[.,]\d+)?)$/);
-        if (!match) continue;
+            if (beskrivelse || dato || beloeb !== null) {
+                uniquePush(
+                    results,
+                    { pageNumber, beskrivelse, dato, beloeb, rawLine },
+                    x => `${x.pageNumber}|${x.beskrivelse}|${x.dato}|${x.beloeb}`
+                );
+            }
+            i++;
+            continue;
+        }
 
-        const beskrivelse = cleanValue(match[1]);
-        const dato = normalizeDate(match[2]);
-        const beloeb = toNumber(match[3]);
+        // Forsøg 2: beskrivelse / dato / beløb på hver sin linje
+        const nextLine  = rawLines[i + 1] || '';
+        const afterLine = rawLines[i + 2] || '';
 
-        if (!beskrivelse && !dato && beloeb === null) continue;
+        const isDate   = /^\d{2}[-/]\d{2}[-/]\d{4}$/.test(nextLine.trim());
+        const isAmount = /^\d+(?:[.,]\d+)?$/.test(afterLine.trim());
 
-        uniquePush(
-            results,
-            {
-                pageNumber,
-                beskrivelse,
-                dato,
-                beloeb,
-                rawLine
-            },
-            x => `${x.pageNumber}|${x.beskrivelse}|${x.dato}|${x.beloeb}`
-        );
+        if (isDate && isAmount) {
+            const beskrivelse = cleanValue(rawLine);
+            const dato        = normalizeDate(nextLine.trim());
+            const beloeb      = toNumber(afterLine.trim());
+
+            uniquePush(
+                results,
+                { pageNumber, beskrivelse, dato, beloeb, rawLine: `${rawLine} ${nextLine} ${afterLine}` },
+                x => `${x.pageNumber}|${x.beskrivelse}|${x.dato}|${x.beloeb}`
+            );
+            i += 3;
+            continue;
+        }
+
+        // Forsøg 3: beskrivelse+dato på én linje, beløb på næste
+        const halfLiner = line.match(/^(.*?)(\d{2}[-/]\d{2}[-/]\d{4})\s*$/);
+        if (halfLiner && isAmount) {
+            const beskrivelse = cleanValue(halfLiner[1]);
+            const dato        = normalizeDate(halfLiner[2]);
+            const beloeb      = toNumber(afterLine.trim());
+
+            uniquePush(
+                results,
+                { pageNumber, beskrivelse, dato, beloeb, rawLine: `${rawLine} ${afterLine}` },
+                x => `${x.pageNumber}|${x.beskrivelse}|${x.dato}|${x.beloeb}`
+            );
+            i += 2;
+            continue;
+        }
+
+        i++;
     }
 
-    return {
-        linjer: results,
-        raw: sectionText
-    };
+    return { linjer: results, raw: sectionText };
 }
 
 // --------------------------------------------------
@@ -491,14 +549,14 @@ function buildPage(pageText, pageNumber, fileName, serviceOrder) {
     return {
         pageNumber,
         serviceOrder,
-        kunde: parseKunde(lines, fileName, serviceOrder),
-        beskrivelse: parseBeskrivelse(lines),
-        produkt: parseProdukt(lines),
-        brugteDele: parseBrugteDele(lines, pageNumber),
-        deleReturneret: parseDeleReturneret(lines, pageNumber),
+        kunde:                  parseKunde(lines, fileName, serviceOrder),
+        beskrivelse:            parseBeskrivelse(lines),
+        produkt:                parseProdukt(lines),
+        brugteDele:             parseBrugteDele(lines, pageNumber),
+        deleReturneret:         parseDeleReturneret(lines, pageNumber),
         arbejdskraftOgUdgifter: parseArbejdskraftOgUdgifter(pageText, pageNumber),
-        noter: parseNoter(lines),
-        rawText: cleanValue(pageText)
+        noter:                  parseNoter(lines),
+        rawText:                cleanValue(pageText)
     };
 }
 
@@ -507,7 +565,7 @@ function buildPage(pageText, pageNumber, fileName, serviceOrder) {
 // --------------------------------------------------
 function buildDocument(text, numPages, fileName) {
     const serviceOrder = extractServiceOrder(text, fileName);
-    const pageTexts = splitPages(text);
+    const pageTexts    = splitPages(text);
 
     const allPages = pageTexts.map((p, i) =>
         buildPage(p, i + 1, fileName, serviceOrder)
@@ -523,13 +581,13 @@ function buildDocument(text, numPages, fileName) {
         }));
 
     return {
-        filnavn: fileName || null,
+        filnavn:        fileName || null,
         serviceOrder,
-        detectedPages: pageTexts.length,
-        reportedPages: numPages,
+        detectedPages:  pageTexts.length,
+        reportedPages:  numPages,
         records,
         ignoredPages,
-        pages: allPages
+        pages:          allPages
     };
 }
 
@@ -546,10 +604,7 @@ app.http('parseIfsReport', {
             if (!body?.pdfBase64) {
                 return {
                     status: 400,
-                    jsonBody: {
-                        ok: false,
-                        error: 'pdfBase64 mangler'
-                    }
+                    jsonBody: { ok: false, error: 'pdfBase64 mangler' }
                 };
             }
 
@@ -558,11 +613,9 @@ app.http('parseIfsReport', {
             const data = await pdf(buffer, {
                 pagerender: async function (pageData) {
                     const textContent = await pageData.getTextContent();
-
                     const text = textContent.items
                         .map(item => item.str)
                         .join('\n');
-
                     return text + '\f';
                 }
             });
@@ -576,9 +629,9 @@ app.http('parseIfsReport', {
             return {
                 status: 200,
                 jsonBody: {
-                    ok: true,
-                    pages: data.numpages || 0,
-                    records: result.records.length,
+                    ok:           true,
+                    pages:        data.numpages || 0,
+                    records:      result.records.length,
                     ignoredPages: result.ignoredPages.length,
                     result
                 }
@@ -588,10 +641,7 @@ app.http('parseIfsReport', {
 
             return {
                 status: 500,
-                jsonBody: {
-                    ok: false,
-                    error: err.message
-                }
+                jsonBody: { ok: false, error: err.message }
             };
         }
     }
