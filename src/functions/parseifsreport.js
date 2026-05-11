@@ -251,7 +251,7 @@ function parseProdukt(lines) {
 
     const line = productLines[0];
 
-    const m = line.match(/^(\d+)\s*(.+?)([A-Z0-9_]+)$/);
+    const m = let m = line.match(/^([A-Z0-9-]+)\s+(.+?)\s+([A-Z0-9_]+)$/i);
     if (!m) {
         return {
             serienummer: null,
