@@ -89,11 +89,14 @@ const LABELS = {
     notes:            ['Notes', 'Noter']
 };
 
+// VIGTIGT: 'Description'/'Beskrivelse' er bevidst udeladt fra ALL_SECTION_HEADINGS.
+// De optræder også som kolonneoverskrifter inde i Parts Used/Returned-sektionerne,
+// og ville afskære sektionen for tidligt hvis de var inkluderet.
+// getSectionLines stopper korrekt ved de øvrige sektioner.
 const ALL_SECTION_HEADINGS = [
     ...LABELS.customer,
     ...LABELS.customerName,
     ...LABELS.customerContact,
-    ...LABELS.description,
     ...LABELS.product,
     ...LABELS.partsUsed,
     ...LABELS.partsReturned,
@@ -200,16 +203,16 @@ function parseKunde(lines, fileName, serviceOrder) {
     const kundeBlock = getSectionLines(lines, LABELS.customer);
 
     return {
-        kunde:        kundeBlock[0] || null,
-        kundeadresse: kundeBlock.length > 1 ? kundeBlock.slice(1).join(', ') : null,
-        kundenummer:  getValueAfterAnyLabel(lines, LABELS.customerName),
-        kundekontakt: getValueAfterAnyLabel(lines, LABELS.customerContact),
-        besogsdato:   normalizeDate(getValueAfterAnyLabel(lines, LABELS.interventionDate)),
-        servicetype:  getValueAfterAnyLabel(lines, LABELS.serviceType),
+        kunde:         kundeBlock[0] || null,
+        kundeadresse:  kundeBlock.length > 1 ? kundeBlock.slice(1).join(', ') : null,
+        kundenummer:   getValueAfterAnyLabel(lines, LABELS.customerName),
+        kundekontakt:  getValueAfterAnyLabel(lines, LABELS.customerContact),
+        besogsdato:    normalizeDate(getValueAfterAnyLabel(lines, LABELS.interventionDate)),
+        servicetype:   getValueAfterAnyLabel(lines, LABELS.serviceType),
         servicenummer: serviceOrder || extractServiceNumberFromFileName(fileName),
-        tekniker:     getValueAfterAnyLabel(lines, LABELS.technicianName),
-        reference:    getValueAfterAnyLabel(lines, LABELS.reference),
-        task:         getValueAfterAnyLabel(lines, LABELS.task)
+        tekniker:      getValueAfterAnyLabel(lines, LABELS.technicianName),
+        reference:     getValueAfterAnyLabel(lines, LABELS.reference),
+        task:          getValueAfterAnyLabel(lines, LABELS.task)
     };
 }
 
@@ -311,7 +314,7 @@ function parseBrugteDele(lines, pageNumber) {
         let item = parseItemLine(rawLine);
 
         // Forsøg 2: PDF har splittet linjen over flere linjer
-        // f.eks.  "15EXP101\nTimer hverdag 07-16\n0.25"
+        // f.eks. "15EXP101\nTimer hverdag 07-16\n1.00"
         if (item && item.beskrivelse === null && item.antal === null) {
             const nextLine  = sectionLines[i + 1] || '';
             const afterLine = sectionLines[i + 2] || '';
@@ -320,7 +323,6 @@ function parseBrugteDele(lines, pageNumber) {
             const afterIsAntal = afterLine && /^\d+(?:[.,]\d+)?$/.test(afterLine.trim());
 
             if (nextIsDesc && afterIsAntal) {
-                // beskrivelse og antal på separate linjer
                 item = {
                     varenummer:  item.varenummer,
                     beskrivelse: cleanValue(nextLine) || null,
@@ -329,7 +331,6 @@ function parseBrugteDele(lines, pageNumber) {
                 };
                 i += 3;
             } else if (nextIsDesc) {
-                // beskrivelse på næste linje, antal evt. embedded
                 const embedded = parseItemLine(`${item.varenummer} ${nextLine}`);
                 if (embedded) {
                     item = { ...embedded, rawLine: `${rawLine} ${nextLine}` };
@@ -403,7 +404,7 @@ function parseDeleReturneret(lines, pageNumber) {
 
 // --------------------------------------------------
 // Arbejdskraft og udgifter
-// (bruges ikke til arbejdstid/kørsel længere – det læses fra Parts Used)
+// (bruges ikke til arbejdstid/kørsel - det læses fra Parts Used)
 // Beholdes til evt. udgiftslinjer uden varenummer
 // --------------------------------------------------
 function parseArbejdskraftOgUdgifter(pageText, pageNumber) {
@@ -581,13 +582,13 @@ function buildDocument(text, numPages, fileName) {
         }));
 
     return {
-        filnavn:        fileName || null,
+        filnavn:       fileName || null,
         serviceOrder,
-        detectedPages:  pageTexts.length,
-        reportedPages:  numPages,
+        detectedPages: pageTexts.length,
+        reportedPages: numPages,
         records,
         ignoredPages,
-        pages:          allPages
+        pages:         allPages
     };
 }
 
