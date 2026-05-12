@@ -248,18 +248,40 @@ function parseProdukt(lines) {
         return { serienummer: null, beskrivelse: null, model: null };
     }
 
+    // Forsøg 1: alt på én linje "0003275775 103 Astronaut A5 RH A5_RIGHT"
     const line = productLines[0];
-
     const m = line.match(/^([A-Z0-9-]+)\s+(.+?)\s+([A-Z0-9_]+)$/i);
-    if (!m) {
-        return { serienummer: null, beskrivelse: cleanValue(line), model: null };
+    if (m) {
+        return {
+            serienummer: cleanValue(m[1]),
+            beskrivelse: cleanValue(m[2]),
+            model:       cleanValue(m[3])
+        };
     }
 
-    return {
-        serienummer: cleanValue(m[1]),
-        beskrivelse: cleanValue(m[2]),
-        model:       cleanValue(m[3])
-    };
+    // Forsøg 2: tre separate linjer
+    // linje 0: serienummer (kun tal/bogstaver, ingen mellemrum)
+    // linje 1: beskrivelse
+    // linje 2: model (ingen mellemrum, typisk A5_RIGHT, A4CU osv.)
+    const sn    = productLines[0] || null;
+    const besk  = productLines[1] || null;
+    const model = productLines[2] || null;
+
+    // Valider at serienummer ligner et serienummer (kun tal)
+    const snLooksLikeSerialNr = sn && /^\d{7,}$/.test(sn.trim());
+    // Valider at model ligner en model (ingen mellemrum, alphanumerisk+underscore)
+    const modelLooksLikeModel = model && /^[A-Z0-9_]+$/i.test(model.trim());
+
+    if (snLooksLikeSerialNr) {
+        return {
+            serienummer: cleanValue(sn),
+            beskrivelse: besk ? cleanValue(besk) : null,
+            model:       modelLooksLikeModel ? cleanValue(model) : null
+        };
+    }
+
+    // Fallback
+    return { serienummer: null, beskrivelse: cleanValue(line), model: null };
 }
 
 // --------------------------------------------------
@@ -633,7 +655,7 @@ app.http('parseIfsReport', {
                 status: 200,
                 jsonBody: {
                     ok:           true,
-                    pages:        data.numpages || 0,
+                    pages:        result.records.length,
                     records:      result.records.length,
                     ignoredPages: result.ignoredPages.length,
                     result: {
