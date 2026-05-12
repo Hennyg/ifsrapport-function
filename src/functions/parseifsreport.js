@@ -269,9 +269,11 @@ function parseItemLine(rawLine) {
     const line = normalizeCompactedLine(rawLine);
 
     // Matcher varenummer-formater:
-    //   15EXP101, 15EXP201  (arbejdstid/kørsel)
-    //   5.1005.3576.0       (reservedel med punktum-separerede tal)
-    const match = line.match(/^((?:15[A-Z]{3}\d{3})|(?:\d+(?:\.\d+)+))\s*(.*)$/i);
+    //   15EXP101, 15EXP201     (arbejdstid/kørsel)
+    //   5.1003.0373.0           (reservedel: mindst 2 punktummer)
+    //   151084                  (6+ cifre uden punktum)
+    // IKKE: 0.50, 1.00, 2.00   (antal-tal med ét punktum afvises)
+    const match = line.match(/^((?:15[A-Z]{3}\d{3})|(?:\d+(?:\.\d+){2,})|(?:\d{6,}))\s*(.*)$/i);
     if (!match) return null;
 
     const varenummer = match[1].trim();
@@ -634,7 +636,15 @@ app.http('parseIfsReport', {
                     pages:        data.numpages || 0,
                     records:      result.records.length,
                     ignoredPages: result.ignoredPages.length,
-                    result
+                    result: {
+                        filnavn:       result.filnavn,
+                        serviceOrder:  result.serviceOrder,
+                        detectedPages: result.detectedPages,
+                        reportedPages: result.reportedPages,
+                        records:       result.records,
+                        ignoredPages:  result.ignoredPages
+                        // pages udeladt - undgår duplikerede data
+                    }
                 }
             };
         } catch (err) {
