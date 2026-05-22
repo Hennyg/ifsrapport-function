@@ -428,48 +428,28 @@ function parseDeleReturneret(lines, pageNumber) {
 
 // --------------------------------------------------
 // Arbejdskraft og udgifter
-// (bruges ikke til arbejdstid/kørsel - det læses fra Parts Used)
-// Beholdes til evt. udgiftslinjer uden varenummer
+// Læser linjer via getSectionLines (samme teknik som parseBrugteDele)
+// for at undgå problemer med sektionsopskæring i rå tekst.
 // --------------------------------------------------
-function parseArbejdskraftOgUdgifter(pageText, pageNumber) {
-    const text = String(pageText || '');
-
-    const startMatch = text.match(/(?:Labour and Expenses|Labour and Expense|Arbejdskraft og Udgifter)\s*/i);
-    if (!startMatch) {
-        return { linjer: [], raw: null };
-    }
-
-    const startIndex = startMatch.index + startMatch[0].length;
-    let sectionText = text.substring(startIndex);
-
-    const endMatch = sectionText.match(/(?:Parts Returned|Dele returneres|Notes|Noter|Description|Beskrivelse)\s*/i);
-    if (endMatch) {
-        sectionText = sectionText.substring(0, endMatch.index);
-    }
-
-    sectionText = cleanValue(sectionText);
-    if (!sectionText) {
-        return { linjer: [], raw: null };
-    }
-
-    const rawLines = sectionText
-        .split('\n')
-        .map(x => x.trim())
-        .filter(Boolean)
-        .filter(x => !isHeaderLine(x))
-        .filter(x => !isNoiseLine(x));
+function parseArbejdskraftOgUdgifter(lines, pageNumber) {
+    const sectionLines = getSectionLines(lines, LABELS.labourAndExpense);
 
     const results = [];
 
     let i = 0;
-    while (i < rawLines.length) {
-        const rawLine = rawLines[i];
+    while (i < sectionLines.length) {
+        const rawLine = sectionLines[i];
         const line = normalizeCompactedLine(rawLine);
+
+        if (isHeaderLine(rawLine) || isNoiseLine(rawLine)) { i++; continue; }
+        if (/^service order:/i.test(rawLine)) { i++; continue; }
+        if (/^\(utc/i.test(rawLine)) { i++; continue; }
+        if (/^[A-ZÆØÅ.\- ]+A\/S$/i.test(rawLine)) { i++; continue; }
 
         // Forsøg 1: beskrivelse + dato + beløb på én linje
         const oneLiner = line.match(/^(.*?)(\d{2}[-/]\d{2}[-/]\d{4})\s*(\d+(?:[.,]\d+)?)$/);
         if (oneLiner) {
-            const beskrivelse = cleanValue(oneLiner[1]);
+            const beskrivelse = cleanValue(oneLiner[1]) || null;
             const dato        = normalizeDate(oneLiner[2]);
             const beloeb      = toNumber(oneLiner[3]);
 
@@ -484,15 +464,15 @@ function parseArbejdskraftOgUdgifter(pageText, pageNumber) {
             continue;
         }
 
-        // Forsøg 2: beskrivelse / dato / beløb på hver sin linje
-        const nextLine  = rawLines[i + 1] || '';
-        const afterLine = rawLines[i + 2] || '';
+        // Forsøg 2: beskrivelse / dato / beløb på separate linjer
+        const nextLine  = sectionLines[i + 1] || '';
+        const afterLine = sectionLines[i + 2] || '';
 
         const isDate   = /^\d{2}[-/]\d{2}[-/]\d{4}$/.test(nextLine.trim());
         const isAmount = /^\d+(?:[.,]\d+)?$/.test(afterLine.trim());
 
         if (isDate && isAmount) {
-            const beskrivelse = cleanValue(rawLine);
+            const beskrivelse = cleanValue(rawLine) || null;
             const dato        = normalizeDate(nextLine.trim());
             const beloeb      = toNumber(afterLine.trim());
 
@@ -508,7 +488,7 @@ function parseArbejdskraftOgUdgifter(pageText, pageNumber) {
         // Forsøg 3: beskrivelse+dato på én linje, beløb på næste
         const halfLiner = line.match(/^(.*?)(\d{2}[-/]\d{2}[-/]\d{4})\s*$/);
         if (halfLiner && isAmount) {
-            const beskrivelse = cleanValue(halfLiner[1]);
+            const beskrivelse = cleanValue(halfLiner[1]) || null;
             const dato        = normalizeDate(halfLiner[2]);
             const beloeb      = toNumber(afterLine.trim());
 
@@ -524,7 +504,10 @@ function parseArbejdskraftOgUdgifter(pageText, pageNumber) {
         i++;
     }
 
-    return { linjer: results, raw: sectionText };
+    return {
+        linjer: results,
+        raw:    sectionLines.length ? sectionLines.join('\n') : null
+    };
 }
 
 // --------------------------------------------------
@@ -579,7 +562,7 @@ function buildPage(pageText, pageNumber, fileName, serviceOrder) {
         produkt:                parseProdukt(lines),
         brugteDele:             parseBrugteDele(lines, pageNumber),
         deleReturneret:         parseDeleReturneret(lines, pageNumber),
-        arbejdskraftOgUdgifter: parseArbejdskraftOgUdgifter(pageText, pageNumber),
+        arbejdskraftOgUdgifter: parseArbejdskraftOgUdgifter(lines, pageNumber),
         noter:                  parseNoter(lines),
         rawText:                cleanValue(pageText)
     };
